@@ -11,9 +11,13 @@ const int FAILURE = 1;
 class SimSearcher
 {
 private:
+	int q;
+
 	std::unordered_map <std::string, std::vector<int>> mp;
 	std::vector <std::string> data;
-	std::vector <std::vector<int>*> gram;
+	std::vector <std::vector<int>*> gram_list;
+	std::vector <int> gram_index;
+	std::priority_queue <std::pair <int, int>> gram_heap;
 public:
 	SimSearcher();
 	~SimSearcher();
