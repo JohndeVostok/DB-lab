@@ -9,12 +9,12 @@ int main(int argc, char **argv)
 	vector<pair<unsigned, unsigned> > resultED;
 	vector<pair<unsigned, double> > resultJaccard;
 
-	unsigned q = 3, edThreshold = 7;
+	unsigned q = 3, edThreshold = 1;
 	double jaccardThreshold = 0.4;
 
 	searcher.createIndex(argv[1], q);
 	searcher.searchJaccard("query", jaccardThreshold, resultJaccard);
-	searcher.searchED("query", edThreshold, resultED);
+	searcher.searchED("query line", edThreshold, resultED);
 
 	for (int i = 0; i < resultED.size(); i++)
 	{

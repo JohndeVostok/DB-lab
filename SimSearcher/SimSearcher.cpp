@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <sstream>
+#include <fstream>
 #include <queue>
 
 using namespace std;
@@ -20,14 +21,14 @@ int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 	mpj.clear();
 	mped.clear();
 	q = q_in;
-	FILE *pFile = fopen (filename ,"r");
-	setvbuf(pFile, NULL, _IOFBF, 0xfffff);
-	char buf[260];
+	char buf[2050];
 	int index = 0;
 	data.clear();
 	ngram.clear();
-	while (fgets(buf, 260, pFile) != 0) {
-		buf[strlen(buf) - 1] = 0;
+
+	ifstream infile(filename);
+
+	while (infile.getline(buf, 2050)) {
 		int len = strlen(buf);
 		int index = data.size();
 		data.push_back(buf);
@@ -43,7 +44,7 @@ int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 
 		unordered_set<string> tokens;
 		istringstream buf_stream(buf);
-		for (string token; buf_stream >> token; tokens.insert(token));
+		for (string token; buf_stream >> token; tokens.emplace(token));
 		for (auto &token : tokens) {
 			for (int i = 0; i + q <= token.length(); i++) {
 				auto &gram_list = mpj[token.substr(i, q)];
@@ -56,12 +57,11 @@ int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 			}
 		}
 	}
-	fclose(pFile);
 	return SUCCESS;
 }
 
 int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<unsigned, double> > &result) {
-	result.clear();
+/*	result.clear();
 
 	unordered_set<string> tokens;
 	istringstream buf_stream(query);
@@ -137,7 +137,7 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 			result.emplace_back(idx, cnt / (double)(n + ngram[idx] - cnt));
 		}
 	}
-
+*/
 	return SUCCESS;
 }
 
@@ -160,7 +160,7 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 		return SUCCESS;
 	}
 
-	unordered_map<string, int> gram_count;
+	unordered_map<string, unsigned> gram_count;
 	for (int i = 0; i + q <= len; i++) {
 		string gram = string(query + i, q);
 		if (!gram_count.count(gram)) {
@@ -170,63 +170,85 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 		n++;
 	}
 
-	vector <pair <int, int>> res;
+	vector <pair <unsigned, unsigned>> res;
 
-	priority_queue <pair <int, vector <pair <int, int>>*>> hp;
+	int bound = len - decay + 1;
+
+	vector <vector <pair <unsigned, unsigned>>*> entries;
+	vector <unsigned> pe;
 
 	int tmpn = 0;
 
 	for (const auto &i : gram_count) {
-		if (mpj.count(i.first)) {
-			hp.push(make_pair(-mpj[i.first].size(), &mpj[i.first]));
+		if (mped.count(i.first)) {
+			entries.push_back(&mped[i.first]);
+			pe.push_back(0);
 			tmpn++;
 		}
 	}
 
-	vector <vector <pair <int, int>>> tmp(tmpn);
+	priority_queue <pair <unsigned, unsigned>> hp;
+
 	int tmpid = 0;
 
-	for (int i = 0; i < tmpn - 1; i++) {
-		auto pa = hp.top();
-		hp.pop();
-		auto pb = hp.top();
-		hp.pop();
-		auto &va = *pa.second;
-		auto &vb = *pb.second;
-		for (int ia = 0, ib = 0; ia < va.size() || ib < vb.size();) {
-			if (ib == vb.size() || (ia < va.size() && va[ia].first < vb[ib].first)) {
-				if (tmp[i].empty() || tmp[i].back().first != va[ia].first) {
-					tmp[i].push_back(va[ia]);
-				} else {
-					tmp[i].back().second += va[ia].second;
-				}
-				ia++;
-			} else {
-				if (tmp[i].empty() || tmp[i].back().first != vb[ib].first) {
-					tmp[i].push_back(vb[ib]);
-				} else {
-					tmp[i].back().second += vb[ib].second;
-				}
-				ib++;
-			}
-		}
-		hp.push(make_pair(-tmp[i].size(), &tmp[i]));
+	for (int i = 0; i < tmpn; i++) {
+		hp.push(make_pair(-(*entries[i])[pe[i]].first, i));
 	}
 
-	auto pc = hp.top();
-	auto &vc = *pc.second;
+	vector <pair <unsigned, unsigned>> tmp;
+	tmp.clear();
 
-	int bound = len - decay;
+	while (!hp.empty()) {
+		int i;
+		tmp.clear();
 
-	for (const auto &i : vc) {
-		if (i.second >= bound) {
-			res.push_back(make_pair(i.first, i.second));
+		for (i = 0; i < bound && !hp.empty();) {
+			tmp.push_back(hp.top());
+			hp.pop();
+			i += (*entries[tmp.back().second])[pe[tmp.back().second]].second;
 		}
+
+
+		int head = -tmp.back().first;
+		
+		if (tmp.back().first == tmp.front().first){
+			while (!hp.empty() && hp.top().first == tmp.front().first) {
+				tmp.push_back(hp.top());
+				hp.pop();
+				i += (*entries[tmp.back().second])[pe[tmp.back().second]].second;
+			}
+			res.emplace_back(-tmp.front().first, i);
+			head++;
+		}
+		for (const auto &i : tmp) {
+//			printf("%d %d %d   ", i.first, i.second, (*entries[i.second])[pe[i.second]].second);
+			int t = i.second;
+//			while (pe[t] < (*entries[t]).size() && (*entries[t])[pe[t]].first < head) {
+//				printf("%d ", (*entries[t])[pe[t]].first);
+//				pe[t]++;
+//			}
+			auto &data = *(entries[t]);
+			auto &index = pe[t];
+			unsigned lowbit;
+			while (true)
+			{
+				lowbit = index ? (index & (index ^ (index - 1))) : 1;
+				if (index + lowbit >= data.size()) break;
+				if (data[index + lowbit].first >= head) break;
+				index += lowbit;
+			}
+			while (lowbit >>= 1)
+				if ((index | lowbit) < data.size() && data[index | lowbit].first < head)
+					index |= lowbit;
+			index++;
+
+			if (pe[t] < (*entries[t]).size()) hp.push(make_pair(-(*entries[t])[pe[t]].first, t));
+		}
+//		printf("\n");
 	}
 
 	for (auto &i: res) {
 		int dist = getED(query, query + len, data[i.first].c_str(), data[i.first].c_str() + data[i.first].length(), threshold);
-		printf("%s %d %d\n", data[i.first].c_str(), len, bound);
 		if (dist <= threshold) {
 			result.emplace_back(i.first, dist);
 		}
