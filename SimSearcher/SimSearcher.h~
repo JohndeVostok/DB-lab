@@ -17,8 +17,7 @@ private:
 	std::vector <std::string> data;
 	std::vector <std::vector<int>*> gram_list;
 	std::vector <int> gram_index;
-	std::vector <int> ngram;
-
+	std::priority_queue <std::pair <int, int>> gram_heap;
 public:
 	SimSearcher();
 	~SimSearcher();

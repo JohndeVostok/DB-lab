@@ -26,7 +26,7 @@ int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 	int index = 0;
 	data.clear();
 	ngram.clear();
-	while (fgets(buf, 260, pFile) != 0) {
+	while (fgets(buf, 257, pFile) != 0) {
 		buf[strlen(buf) - 1] = 0;
 		int len = strlen(buf);
 		int index = data.size();
