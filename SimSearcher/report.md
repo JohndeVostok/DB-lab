@@ -249,9 +249,10 @@ make
 
 ### 运行结果
 
-exp1: 78s
-
-exp1-final: 480s
+|ID|Homework|Upload Timestamp|Status|Memory(GB)|Time(s)|
+|-|-|-|-|-|-|
+|exp1|4068|exp1|2018/04/09 16:47:27|Correct.|0.136|70.55|
+|exp1-final|4070(Marked)|exp1-final|2018/04/09 16:50:58|Correct.|0.326|461.062|
 
 ### 性能分析
 
