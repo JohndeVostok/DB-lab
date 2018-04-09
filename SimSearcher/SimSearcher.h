@@ -15,8 +15,6 @@ private:
 
 	std::unordered_map <std::string, std::vector<std::pair<unsigned, unsigned>>> mpj, mped;
 	std::vector <std::string> data;
-	std::vector <std::vector<int>*> gram_list;
-	std::vector <int> gram_index;
 	std::vector <int> ngram;
 
 public:
