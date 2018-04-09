@@ -61,8 +61,8 @@ int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 }
 
 int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<unsigned, double> > &result) {
-/*	result.clear();
-
+	result.clear();
+/*
 	unordered_set<string> tokens;
 	istringstream buf_stream(query);
 	for (string token; buf_stream >> token; tokens.insert(token));
@@ -223,28 +223,33 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 		for (const auto &i : tmp) {
 //			printf("%d %d %d   ", i.first, i.second, (*entries[i.second])[pe[i.second]].second);
 			int t = i.second;
-//			while (pe[t] < (*entries[t]).size() && (*entries[t])[pe[t]].first < head) {
-//				printf("%d ", (*entries[t])[pe[t]].first);
-//				pe[t]++;
-//			}
-			auto &data = *(entries[t]);
-			auto &index = pe[t];
-			unsigned lowbit;
-			while (true)
-			{
-				lowbit = index ? (index & (index ^ (index - 1))) : 1;
-				if (index + lowbit >= data.size()) break;
-				if (data[index + lowbit].first >= head) break;
-				index += lowbit;
+
+			int pw = 1;
+			while (pe[t] + pw < (*entries[t]).size() && (*entries[t])[pe[t] + pw].first < head) {
+				pw += pw;
 			}
-			while (lowbit >>= 1)
-				if ((index | lowbit) < data.size() && data[index | lowbit].first < head)
-					index |= lowbit;
-			index++;
+
+			int l = pe[t], r, mid;
+
+			if (l + pw < (*entries[t]).size()) {
+				r = l + pw;
+			} else {
+				r = (*entries[t]).size();
+			}
+	
+			while (l + 1 < r) {
+				mid = (l + r) >> 1;
+				if ((*entries[t])[mid].first < head) l = mid; else r = mid;
+			}
+			if ((*entries[t])[l].first < head) l++;
+			pe[t] = l;
+
+			while (pe[t] < (*entries[t]).size() && (*entries[t])[pe[t]].first < head) {
+				pe[t]++;
+			}
 
 			if (pe[t] < (*entries[t]).size()) hp.push(make_pair(-(*entries[t])[pe[t]].first, t));
 		}
-//		printf("\n");
 	}
 
 	for (auto &i: res) {
