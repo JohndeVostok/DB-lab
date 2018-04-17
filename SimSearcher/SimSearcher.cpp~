@@ -141,21 +141,10 @@ inline void denew(unsigned &x, unsigned y) {
 
 unsigned jump(Entry& entry, unsigned target)
 {
-	auto &data = entry.get();
-	auto &index = entry.idx;
-	unsigned lowbit;
-	while (true)
-	{
-		lowbit = index ? (index & -index) : 1;
-		if (index + lowbit >= data.size()) break;
-		if (data[index + lowbit].first > target) break;
-		index += lowbit;
+	while (entry.idx < entry.get().size() && entry.front().first <= target) {
+		entry.idx++;
 	}
-	while (lowbit >>= 1)
-		if ((index | lowbit) < data.size() && data[index | lowbit].first <= target)
-			index |= lowbit;
-	++index;
-	return data[index - 1].first == target ? data[index - 1].second : 0;
+	return (*(entry.list))[entry.idx - 1].first == target ? (*(entry.list))[entry.idx - 1].second : 0;
 }
 
 void search(unordered_map<string, unsigned> const& gram_count, unordered_map <string, vector <pair<unsigned, unsigned>>> &mp, unsigned bound, vector <pair <unsigned, unsigned>> &res) {
