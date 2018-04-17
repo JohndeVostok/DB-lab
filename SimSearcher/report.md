@@ -1,36 +1,38 @@
-#include "SimSearcher.h"
-#include <unordered_set>
-#include <cstdlib>
-#include <cstring>
-#include <cstdio>
-#include <cmath>
-#include <cstdio>
-#include <sstream>
-#include <fstream>
-#include <queue>
+# 数据库专题训练实验报告
 
-using namespace std;
+计54 马子轩 2015012283
 
-SimSearcher::SimSearcher() {}
+## 实验内容
 
-SimSearcher::~SimSearcher() {}
+### 综述
 
-struct Entry {
-	typedef vector <pair <unsigned, unsigned>> entry_t;
-	entry_t *list;
-	unsigned cnt, idx;
-	Entry(vector <pair <unsigned, unsigned>> *list, int cnt, int idx = 0) : list(list), cnt(cnt), idx(idx) {}
-	entry_t &get() {
-		return *list;
-	}
-	pair <unsigned, unsigned> front() {
-		return (*list)[idx];
-	}
-};
+实验内容为近似查询，具体就是根据编辑距离(ED)和Jaccard距离建立倒排列表。针对查询筛选相应的结果。
 
-void search(unordered_map<string, unsigned> const& gram_count, unordered_map <string, vector <pair<unsigned, unsigned>>> &mp, unsigned bound, vector <pair <unsigned, unsigned>> &res);
-unsigned getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres);
+### 实验框架
 
+Simsearcher类中三个方法:
+
+createIndex()
+
+读入数据，预处理
+
+searchJaccard()
+
+按照Jaccard方式查询
+
+searchED()
+
+按照编辑距离查询
+
+## 实验过程
+
+### createIndex
+
+我在这个过程中主要是分gram，建立倒排列表。
+
+其中ED需要按gram长度分gram，而Jaccard按空格直接分割即可。
+
+```cpp
 int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 	mpj.clear();
 	mped.clear();
@@ -66,7 +68,13 @@ int SimSearcher::createIndex(const char *filename, unsigned q_in) {
 	}
 	return SUCCESS;
 }
+```
 
+### searchJaccard
+
+将输入query按空格分割，查询，并计算Jaccard值。
+
+```cpp
 int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<unsigned, double> > &result) {
 	result.clear();
 
@@ -91,7 +99,13 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 	}
 	return SUCCESS;
 }
+```
 
+### searchED
+
+将输入分成gram，在倒排列表中查询。其中，编辑距离较小的查询，只能全部搜索，这种情况单独处理。其他情况，匹配的gram数是有最小值的，因此，可以直接按gram查询，查出部分结果，再计算编辑距离二次筛选。
+
+```cpp
 int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<unsigned, unsigned> > &result) {
 	result.clear();
 
@@ -134,11 +148,13 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 	}
 	return SUCCESS;
 }
+```
 
-inline void denew(unsigned &x, unsigned y) {
-	if (x > y) x = y;
-}
+### search
 
+查询gram数匹配的条目，这部分我花了较多功夫。我的实现方式是，按gram取出相应的列表。然后每次把列表头放进堆，在堆中pop出要求数量的gram，判断这些是否属于相同的条目。如果属于，说明这个条目满足了匹配gram数，如果不属于，那么他不匹配，同时说明query中该gram无效，此时进行剪枝。每次匹配后，将每个列表的列表的无效开头(不可能再被匹配)去掉。最后即可得到结果。具体过程见代码实现。
+
+<<<<<<< HEAD:SimSearcher/SimSearcher.cpp~
 unsigned jump(Entry& entry, unsigned target)
 {
 	while (entry.idx < entry.get().size() && entry.front().first <= target) {
@@ -146,6 +162,21 @@ unsigned jump(Entry& entry, unsigned target)
 	}
 	return (*(entry.list))[entry.idx - 1].first == target ? (*(entry.list))[entry.idx - 1].second : 0;
 }
+=======
+```cpp
+struct Entry {
+	typedef vector <pair <unsigned, unsigned>> entry_t;
+	entry_t *list;
+	unsigned cnt, idx;
+	Entry(vector <pair <unsigned, unsigned>> *list, int cnt, int idx = 0) : list(list), cnt(cnt), idx(idx) {}
+	entry_t &get() {
+		return *list;
+	}
+	pair <unsigned, unsigned> front() {
+		return (*list)[idx];
+	}
+};
+>>>>>>> 0877db613ea96505865e916329c669bf75382675:SimSearcher/report.md
 
 void search(unordered_map<string, unsigned> const& gram_count, unordered_map <string, vector <pair<unsigned, unsigned>>> &mp, unsigned bound, vector <pair <unsigned, unsigned>> &res) {
 	vector <Entry> entries;
@@ -202,58 +233,47 @@ void search(unordered_map<string, unsigned> const& gram_count, unordered_map <st
 		if (cnt >= bound) res.emplace_back(idx, cnt);
 	}
 }
+```
 
-unsigned getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres) {
-	if (ed1 - st1 > ed2 - st2) {
-		swap(st1, st2);
-		swap(ed1, ed2);
-	}
-	while (st1 < ed1 && *st1 == *st2) {
-		st1++;
-		st2++;
-	}
-	while (st1 < ed1 && *(ed1 - 1) == *(ed2 - 1)) {
-		ed1--;
-		ed2--;
-	}
-	if (st1 == ed1) {
-		return ed2 - st2;
-	}
-	unsigned l1 = ed1 - st1, l2 = ed2 - st2;
-	if (thres > l2) {
-		thres = l2;
-	}
-	if (l1 + thres < l2) {
-		return thres + 1;
-	}
+## 实验结果
 
-	unsigned range = thres << 1 | 1;
-	vector <unsigned> d0(range), d1(range);
+### 代码结构
 
-	for (unsigned j = 0; j <= thres; j++) {
-		d0[j + thres] = j;
-	}
-	for (unsigned i = 1; i <= l1; i++) {
-		unsigned lowb = i < thres ? 0 : i - thres;
-		unsigned upb = min(l2, i + thres);
-		bool f = 0;
-		for (unsigned j = lowb, pos = j + thres - i; j <= upb; j++, pos++) {
-			d1[pos] = thres + 1;
-			if (j > lowb) {
-				denew(d1[pos], d1[pos - 1] + 1);
-			}
-			if (j > 0) {
-				denew(d1[pos], d0[pos] + (st1[i - 1] != st2[j - 1]));
-			}
-			if (j < i + thres) {
-				denew(d1[pos], d0[pos + 1] + 1);
-			}
-			f |= (d1[pos] <= thres);
-		}
-		if (!f) {
-			return thres + 1;
-		}
-		swap(d0, d1);
-	}
-	return d0[l2 + thres - l1];
-}
+makefile
+
+Simsearcher.cpp
+
+Simsearcher.h
+
+main.cpp
+
+### github repository
+
+https://github.com/JohndeVostok/DB-lab
+
+### 运行过程
+
+make
+
+./Simsearcher sample.txt
+
+### 运行结果
+
+|ID|Homework|Upload Timestamp|Status|Memory(GB)|Time(s)|
+|-|-|-|-|-|-|
+|exp1|4068|exp1|2018/04/09 16:47:27|Correct.|0.136|70.55|
+|exp1-final|4070(Marked)|exp1-final|2018/04/09 16:50:58|Correct.|0.326|461.062|
+
+### 性能分析
+
+根据编写过程中的情况，在查询过程中，不针对失效gram个数进行剪枝是无法通过所有数据的。
+
+另外，在处理无效gram的时候，列表指针的跳跃我编写了3种不同的算法:顺序查询，二分查找，先倍增再二分。结论上，这三种方式差别不大。不构成性能瓶颈。
+
+同时，我还测试了两种其他的查询方式，都是基于对需要查询的gram列表进行合并，一种是直接连接，排序。一种是启发式归并。第一个复杂度为logNL，第二个是NL。这两种都无法通过所有测试点。原因是因为两者扩展性较差，不能够合理进行剪枝优化，对大的数据性能非常差。
+
+最后我的方法，堆中的数据不会太多，因此和之前提到的第二种方式理论复杂度相同，但是能剪枝，因此选用了此算法。
+
+## 实验总结
+
+这个实验需要在课程理解的基础上，进行较多小优化。同时还要管理较多的边界条件。实际过程中还是遇到了很多困难的，在通过和同学讨论交流后，选择了较为合适的算法才通过了测试。希望能在下个实验中吸取教训。
