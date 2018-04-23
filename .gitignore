@@ -4,4 +4,6 @@
 *.swp
 *.exe
 *.out
+*.zip
 SimSearcher/simsearcher
+SimJoiner/simjoiner
