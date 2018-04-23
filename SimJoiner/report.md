@@ -1,57 +1,50 @@
-#include "SimJoiner.h"
-#include "trie.h"
+# 数据库专题训练实验报告
 
-#include <algorithm>
-#include <sstream>
-#include <cstring>
+计54 马子轩 2015012283
 
-using namespace std;
+## 实验内容
 
-const int SEED = 357;
-int ED_LIMIT = 2;
+### 题目描述
 
-int nstr;
-int length[MAXN];
-int qFlag[MAXN];
-int pos[MAX_LENGTH][4], len[MAX_LENGTH][4];
-unsigned pw[MAX_LENGTH];
-unsigned shash[MAXN][256];
-char str[MAXN][MAX_LENGTH];
-vector <pair <unsigned, int>> vec[MAX_LENGTH][4];
+近似连接
 
-SimJoiner::SimJoiner() {
-	nquery = 1;
-}
+给定两篇文档，按行拆分，给定一个阈值，返回所有满足阈值条件的语句对。
 
-SimJoiner::~SimJoiner() {
-}
+其中条件分为编辑距离和Jaccard两种。
 
-void getHash(unsigned *hash, const char *str, int len) {
-    hash[0] = str[0];
-    for (int i = 1; i < len; i++) {
-    	hash[i] = hash[i - 1] * SEED + str[i];
-    }
-}
+### 实验框架
 
-unsigned searchHash(unsigned *hash, int l, int r) {
-    if (l > r) return 0;
-    unsigned x = l ? hash[l - 1] * pw[r - l + 1] : 0;
-    return hash[r] - x;
-}
+实现SimJoiner类中2个方法:
 
-void insert(unsigned* hash, int l, int id) {
-    int baselen = l / (ED_LIMIT + 1);
-    int nr = l % (ED_LIMIT + 1), p = 0;
-    for (int i = 0; i <= ED_LIMIT; i++) {
-        int tmplen = baselen + (i + nr > ED_LIMIT);
-        pos[l][i] = p;
-        len[l][i] = tmplen;
-        unsigned h = searchHash(hash, p, p + tmplen - 1);
-        vec[l][i].emplace_back(h, id);
-        p += tmplen;
-    }
-}
+joinED()
 
+joinJaccard()
+
+## 实验过程
+
+### ED
+
+#### 算法分析
+
+我采用了filter-validate方式设计
+
+length filter -> partition filter -> prefix filter -> suffix filter -> validate
+
+length filter: 按长度筛选掉一定不可能的entry
+
+partition filter: 分段，如果有一段完全相同，那么他是备选的entry
+
+prefix filter: 判断前缀，如果编辑距离过大，筛掉
+
+suffix filter: 计算后缀的编辑距离，求和，得到entry的编辑距离，判断筛选
+
+validate: 计算编辑距离
+
+其中使用了hash方式进行字符串的比较，加快程序运行速度。
+
+####createIndex
+
+```cpp
 void SimJoiner::createIndexED(const char *filename) {
 	FILE *pf = fopen(filename, "r");
 	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
@@ -85,7 +78,11 @@ void SimJoiner::createIndexED(const char *filename) {
 		}
 	}
 }
+```
 
+####search
+
+```cpp
 void SimJoiner::searchED(const char *qstr, int qlen, int qid, vector <EDJoinResult> &result) {
     nquery++;
     static unsigned qhash[MAX_LENGTH];
@@ -149,135 +146,31 @@ void SimJoiner::searchED(const char *qstr, int qlen, int qid, vector <EDJoinResu
         }
     }
 }
+```
 
-int SimJoiner::joinED(const char *filename1, const char *filename2, unsigned threshold, vector<EDJoinResult> &result) {
-	result.clear();
+### Jaccard
 
-	ED_LIMIT = threshold;
-    createIndexED(filename2);
+#### 算法分析
 
-	FILE *pf = fopen(filename1, "r");
-	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
+我采用了filter-validate方式设计
 
-	int cquery = 0, length;
-	char buf[MAX_LENGTH];
-	while (fgets(buf, MAX_LENGTH, pf)) {
-		if (buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = 0;
-		searchED(buf, strlen(buf), cquery, result);
-		cquery++;
-	}
-	fclose(pf);
+length filter -> inverted list -> 
 
-    sort(result.begin(), result.end());
-	return SUCCESS;
-}
+length filter: 根据切分出的term数筛选一轮
 
-void denew(unsigned &x, unsigned y) {
-	if (x > y) x = y;
-}
+inverted list: 构造倒排列表
 
-unsigned SimJoiner::getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres) {
-	if (ed1 - st1 > ed2 - st2) {
-		swap(st1, st2);
-		swap(ed1, ed2);
-	}
-	while (st1 < ed1 && *st1 == *st2) {
-		st1++;
-		st2++;
-	}
-	while (st1 < ed1 && *(ed1 - 1) == *(ed2 - 1)) {
-		ed1--;
-		ed2--;
-	}
-	if (st1 == ed1) {
-		return ed2 - st2;
-	}
-	unsigned l1 = ed1 - st1, l2 = ed2 - st2;
-	if (thres > l2) {
-		thres = l2;
-	}
-	if (l1 + thres < l2) {
-		return thres + 1;
-	}
+prefix prune: 根据前缀中的匹配项筛选，如果达到要求数，进入下一轮
 
-	unsigned range = thres << 1 | 1;
-	vector <unsigned> d0(range), d1(range);
+suffix prune: 根据后缀匹配项筛选，如果总匹配数达到要求，进入下一轮
 
-	for (unsigned j = 0; j <= thres; j++) {
-		d0[j + thres] = j;
-	}
-	for (unsigned i = 1; i <= l1; i++) {
-		unsigned lowb = i < thres ? 0 : i - thres;
-		unsigned upb = min(l2, i + thres);
-		bool f = 0;
-		for (unsigned j = lowb, pos = j + thres - i; j <= upb; j++, pos++) {
-			d1[pos] = thres + 1;
-			if (j > lowb) {
-				denew(d1[pos], d1[pos - 1] + 1);
-			}
-			if (j > 0) {
-				denew(d1[pos], d0[pos] + (st1[i - 1] != st2[j - 1]));
-			}
-			if (j < i + thres) {
-				denew(d1[pos], d0[pos + 1] + 1);
-			}
-			f |= (d1[pos] <= thres);
-		}
-		if (!f) {
-			return thres + 1;
-		}
-		swap(d0, d1);
-	}
-	return d0[l2 + thres - l1];
-}
+validate: 计算Jaccard值
 
-int nterm;
-int tmpSize[MAXN];
-int termSize[MAXN], termMin[MAXN]; // wordN
+其中使用了trie来构造global order。
 
-vector <vector <int>> invList;
+#### createIndex
 
-Trie triePool[MAX_NODE];
-Trie *pr;
-int trieSize;
-
-Trie *newTrie () {
-	return &triePool[trieSize++];
-}
-
-void SimJoiner::insertTrie (int id) {
-	Trie *px = 0;
-	vector <string> tokens;
-	vector <int> terms;
-	istringstream bufStream(str[id]);
-	for (string token; bufStream >> token; tokens.emplace_back(token));
-	for (auto &token : tokens) {
-		px = pr;
-		for (int i = 0; i < token.length(); i++) {
-			px = px->next(token[i]);
-		}
-		if (px->id == -1) {
-			termMin[nterm] = MAX_LENGTH;
-			px->id = nterm++;
-			invList.emplace_back(0);
-		}
-		terms.emplace_back(px->id);
-	}
-	sort(terms.begin(), terms.end());
-	auto uniqueEnd = unique(terms.begin(), terms.end());
-	termSize[id] = uniqueEnd - terms.begin();
-	terms.erase(uniqueEnd, terms.end());
-
-	for (const auto &term : terms) {
-		invList[term].emplace_back(id);
-		if (terms.size() < termMin[term]) {
-			termMin[term] = terms.size();
-		}
-	}
-}
-
-int nword;
-
+```cpp
 void SimJoiner::createIndexJaccard(const char *filename) {
     nstr = 0;
     nterm = 0;
@@ -299,7 +192,11 @@ void SimJoiner::createIndexJaccard(const char *filename) {
     	sort(invList[i].begin(), invList[i].end());
     }
 }
+```
 
+#### search
+
+```cpp
 void SimJoiner::searchJaccard(const char *qstr, int qlen, double threshold, int qid, vector <JaccardJoinResult> &result) {
     nquery++;
     int p = 0, qTermSize = 0, appearWordN = 0;
@@ -387,21 +284,53 @@ void SimJoiner::searchJaccard(const char *qstr, int qlen, double threshold, int 
         }
     }
 }
+```
 
-int SimJoiner::joinJaccard(const char *filename1, const char *filename2, double threshold, vector <JaccardJoinResult> &result)
-{
-    result.clear();
-    createIndexJaccard(filename2);
+## 实验结果
 
-	FILE *pf = fopen(filename1, "r");
-	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
-	int cquery = 0;
-	char buf[MAX_LENGTH];
-	while (fgets(buf, MAX_LENGTH, pf)) {
-		if (buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = 0;
-		searchJaccard(buf, strlen(buf), threshold, cquery, result);
-		cquery++;
-	}
-	fclose(pf);
-    return SUCCESS;
-}
+### 代码结构
+
+makefile
+
+SimJoiner.cpp
+
+SimJoiner.h
+
+Trie.cpp
+
+Trie.h
+
+main.cpp
+
+### github repository
+
+https://github.com/JohndeVostok/DB-lab
+
+### 运行过程
+
+make
+
+./simjoiner a.txt b.txt
+
+### 运行结果
+
+|Test|ID|Homework|Upload Timestamp|Status|Memory(GB)|Time(s)|
+|-|-|-|-|-|-|-|
+|exp2|7148|exp2|2018/04/23 15:09:51|Correct.|1.348|1.11|
+|exp2-final|7106(Marked)|exp2-final|2018/04/23 14:35:50|Correct.|1.393|5.758|
+
+### 性能分析
+
+算法中影响最大的部分实际是字符串的比较方法。针对ED测试，没使用hash的时候初始化已经使用了几分钟，而后续查询根本无法完成。使用hash方式之后，字符串比较便的简便容易，而可以增加多种filter方法而不增加性能代价了。
+
+而Jaccard中，我使用了Trie进行global order的构造，写法简便有效，也方便查询。后续filter就是实现了课件上的算法。
+
+比较有效的优化方式：
+
+1、读入优化，整个读进来针对字符处理。(麻烦)
+
+2、避免使用vector等c++的方法，使用c数组等，能够减小动态开内存的时间开销。
+
+## 实验总结
+
+这个实验比起上一个来说，实现课件上的算法即可得到比较不错的结果了。希望大作业中能应用到这两次作业的成果。
