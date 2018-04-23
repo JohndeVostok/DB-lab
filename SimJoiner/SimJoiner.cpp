@@ -1,186 +1,176 @@
 #include "SimJoiner.h"
-#include <fstream>
-#include <sstream>
-#include <cstdio>
+#include "hash.h"
+#include "trie.h"
+
 #include <algorithm>
-#include <unordered_map>
+#include <sstream>
+#include <cstring>
 
 using namespace std;
 
+int ED_LIMIT = 2;
+
+int nstr;
+char str[MAXN][MAX_LENGTH];
+int length[MAXN];
+
+int qFlag[MAXN];
+int pos[MAX_LENGTH][4], len[MAX_LENGTH][4];
+unsigned shash[MAXN][256];
+
+vector <pair <unsigned, int>> vec[MAX_LENGTH][4];
+
 SimJoiner::SimJoiner() {
+	nquery = 1;
 }
 
 SimJoiner::~SimJoiner() {
 }
 
-bool cmp(string a, string b) {
-	return (a[0] == b[0] ? a[1] < b[1] : a[0] < b[0]); 
-}
+Hash hasher;
 
-int get(string a, string b) {
-	if (a[0] < b[0]) return 1;
-	if (a[0] > b[0]) return -1;
-	if (a[1] < b[1]) return 1;
-	if (a[1] > b[1]) return -1;
-	return 0;
-}
-
-unsigned getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres);
-
-int loadData(vector <string> &res, const char *filename) {
-	res.clear();
-	ifstream fin(filename);
-	char buf[2050];
-	while (fin.getline(buf, 2048)) {
-		res.emplace_back(buf);
+void insert(unsigned* hash, int l, int id) {
+	int baselen = l / (ED_LIMIT + 1);
+	int nr = l % (ED_LIMIT + 1), p = 0;
+	for (int i = 0; i <= ED_LIMIT; i++) {
+		int tmplen = baselen + (i + nr > ED_LIMIT);
+		pos[l][i] = p;
+		len[l][i] = tmplen;
+		unsigned h;
+		hasher.search(h, hash, p, p + tmplen - 1);
+		vec[l][i].emplace_back(h, id);
+		p += tmplen;
 	}
-	return SUCCESS;
 }
 
-int SimJoiner::joinJaccard(const char *filename1, const char *filename2, double threshold, vector<JaccardJoinResult> &result) {
-    result.clear();
-    return SUCCESS;
-}
+void SimJoiner::createIndexED(const char *filename) {
+	FILE *pf = fopen(filename, "r");
+	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
 
-int SimJoiner::joinED(const char *filename1, const char *filename2, unsigned threshold, vector<EDJoinResult> &result) {
-    result.clear();
-    vector <string> data1, data2;
-    loadData(data1, filename1);
-    loadData(data2, filename2);
+	memset(pos, -1, sizeof(pos));
 
-	vector <vector <int>> filter;
-	vector <vector <string>> grams;
-	vector <unordered_map <string, vector <int>>> preInv;
-	int maxlen = 0;
-	for (const auto &str : data2) {
-		if (str.length() > maxlen) maxlen = str.length();
-	}
-	filter.resize(maxlen + 1);
-	preInv.resize(maxlen + 1);
-	grams.resize(data2.size());
-
-	for (int i = 0; i < data2.size(); i++) {
-		auto &str = data2[i];
-		auto &tmpfilter = filter[str.length()];
-		tmpfilter.emplace_back(i);
-		for (int j = 0; j + q <= str.length(); j++) {
-			grams[i].emplace_back(str.substr(j, q));
-		}
-		sort(grams[i].begin(), grams[i].end(), cmp);
-		for (int j = 0; j < threshold * q + 1 && j < grams[i].size(); j++) {
-			preInv[str.length()][grams[i][j]].emplace_back(i);
+	for (int i = 1; i < MAX_LENGTH; i++) {
+		for (int j = 0; j <= ED_LIMIT; j++) {
+			vec[i][j].clear();
 		}
 	}
 
-	for (int i = 0; i <= maxlen; i++) {
-		for (auto &tmp : preInv[i]) {
-			unordered_map <int, int> unq;
-			for (const auto &idx : tmp.second) {
-				unq[idx] = 1;
-			}
-			tmp.second.clear();
-			for (const auto &p : unq) {
-				tmp.second.emplace_back(p.first);
-			}
+	nstr = 0;
+	while (fgets(str[nstr], MAX_LENGTH, pf)) {
+		if (str[nstr][strlen(str[nstr]) - 1] == '\n') str[nstr][strlen(str[nstr]) - 1] = 0;
+		length[nstr] = strlen(str[nstr]);
+		hasher.get(shash[nstr], str[nstr], length[nstr]);
+		insert(shash[nstr], length[nstr], nstr);
+		nstr++;
+	}
+	fclose(pf);
+	
+	for (int i = 0; i < MAX_LENGTH; i++) {
+		if (pos[i][0] == -1) continue;
+		for (int j = 0; j <= ED_LIMIT; j++) {
+			sort(vec[i][j].begin(), vec[i][j].end());
 		}
 	}
+}
 
-	vector <int> flag(data2.size(), 0);
-
-	for (int i = 0; i < data1.size(); i++) {
-		vector <string> tmpGrams;
-		auto &str = data1[i];
-		for (int j = 0; j + q <= str.length(); j++) {
-			tmpGrams.emplace_back(str.substr(j, q));
+void SimJoiner::searchED(const char *qstr, int qlen, int qid, vector <EDJoinResult> &result) {
+	nquery++;
+	static unsigned qhash[MAX_LENGTH];
+	hasher.get(qhash, qstr, qlen);
+	int lmin = max(1, qlen - ED_LIMIT), lmax = min(MAX_LENGTH - 1, qlen + ED_LIMIT);
+	for (int ilen = lmin; ilen <= lmax; ilen++) {
+		if (pos[ilen][0] == -1) {
+			continue;
 		}
-		sort(tmpGrams.begin(), tmpGrams.end(), cmp);
-
-		int minl = str.length() - threshold;
-		if (minl < 0) {
-			minl = 0;
-		}
-		int maxl = str.length() + threshold;
-		if (maxl > maxlen) {
-			maxl = maxlen;
-		}
-
-		vector <int> candidates1;
-
-		for (int l = minl; l <= maxl; l++) {
-			for (const auto &subinv : preInv[l]) {
-				for (const auto &idx : subinv.second) {
-					if (!flag[idx]) {
-						candidates1.emplace_back(idx);
-						flag[idx] = 1;
+		int dlen = qlen - ilen;
+		for (int i = 0; i <= ED_LIMIT; i++) {
+			int tlen = len[ilen][i], tpos = pos[ilen][i];
+			vector <pair <unsigned, int>> &tvec = vec[ilen][i];
+			int l = tpos + max(-i, dlen - (ED_LIMIT - i));
+			int r = tpos + min(i, dlen + (ED_LIMIT - i));
+			int s = tvec.size();
+			l = max(0, l);
+			r = min(r, qlen - tlen);
+			int tl = i, tr = ED_LIMIT - i;
+			for (int j = l; j <= r; j++)
+			{
+				unsigned h;
+				hasher.search(h, qhash, j, j + tlen - 1);
+				vector <pair <unsigned, int>>::iterator it = lower_bound(tvec.begin(), tvec.end(), make_pair(h, 0));
+				if (it == tvec.end()) {
+					continue;
+				}
+				int idx = it - tvec.begin();
+				int ans, ans1, ans2;
+				for (int k = idx; k < s; k++) {
+					if (tvec[k].first != h) {
+						break;
+					}
+					int id = tvec[k].second;
+					if (qFlag[id] == nquery) {
+						continue;
+					}
+					if (tl) {
+						ans1 = getED(qstr, qstr + j, str[id], str[id] + tpos, tl);
+					} else {
+						unsigned tmph1, tmph2;
+						hasher.search(tmph1, qhash, 0, j - 1);
+						hasher.search(tmph2, shash[id], 0, tpos - 1);
+						ans1 = 1 - (tmph1 == tmph2);
+					}
+					if (ans1 > tl) {
+						continue;
+					}
+					if (tr) {
+						ans2 = getED(qstr + j + tlen, qstr + qlen, str[id] + tpos + tlen, str[id] + length[id], tr);
+					}
+					else {
+						unsigned tmph1, tmph2;
+						hasher.search(tmph1, qhash, j + tlen, qlen - 1);
+						hasher.search(tmph2, shash[id], tpos + tlen, length[id] - 1);
+						ans2 = 1 - (tmph1 == tmph2);
+					}
+					if (ans2 > tr) {
+						continue;
+					}
+					ans = ans1 + ans2;
+					if (ans <= ED_LIMIT) {
+						qFlag[id] = nquery;
+						result.emplace_back(qid, id, ans);
 					}
 				}
 			}
 		}
-
-		for (const auto &idx : candidates1) {
-			flag[idx] = 0;
-		}
-
-		vector <int> candidates2;
-
-		for (const auto &idx : candidates1) {
-			int bound = max(grams[idx].size(), tmpGrams.size()) - q * threshold;
-			int l = 0, r = 0, s = 0, flag = 0, cnt = 0;
-			while (l < tmpGrams.size() && r < grams[idx].size()) {
-				s = get(tmpGrams[l], grams[idx][r]);
-				if (s == 1) l++;
-				if (s == 0) {cnt += 2; l++; r++;}
-				if (s == -1) r++;
-				if (cnt >= bound) break;
-			}
-			if (cnt >= bound) candidates2.emplace_back(idx);
-		}
-
-/*		vector <pair <unsigned, unsigned>> tmpRes;
-		for (const auto &idx : candidates2) {
-			unsigned ed = getED(str.c_str(), str.c_str() + str.length(), data2[idx].c_str(), data2[idx].c_str() + data2[idx].length(), threshold);
-			
-			if (ed <= threshold) {
-				tmpRes.emplace_back(idx, ed);
-			}
-		}
-		sort(tmpRes.begin(), tmpRes.end());
-		for (const auto &p : tmpRes) {
-			result.emplace_back(i, p.first, p.second);
-		}*/
 	}
-
-/*	for (int i = 0; i <= maxlen; i++) {
-		printf("len: %d\n", i);
-		for (const auto &tmp : filter[i]) {
-			printf("%d ", tmp);
-		}
-		printf("\n");
-		for (const auto &tmp : preInv[i]) {
-			printf("%s ", tmp.first.c_str());
-			for (const auto &idx : tmp.second) {
-				printf("%d ", idx);
-			}
-			printf("\n");
-		}
-	}
-
-	for (int i = 0; i < data2.size(); i++) {
-		printf("id: %d\n", i);
-		for (const auto &j : grams[i]) {
-			printf("%s ", j.c_str());
-		}
-		printf("\n");
-	}*/
-	
-    return SUCCESS;
 }
 
-inline void denew(unsigned &x, unsigned y) {
+int SimJoiner::joinED(const char *filename1, const char *filename2, unsigned threshold, vector<EDJoinResult> &result) {
+	result.clear();
+
+	ED_LIMIT = threshold;
+	createIndexED(filename2);
+
+	FILE *pf = fopen(filename1, "r");
+	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
+
+	int cquery = 0, length;
+	char buf[MAX_LENGTH];
+	while (fgets(buf, MAX_LENGTH, pf)) {
+		if (buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = 0;
+		searchED(buf, strlen(buf), cquery, result);
+		cquery++;
+	}
+	fclose(pf);
+
+	sort(result.begin(), result.end());
+	return SUCCESS;
+}
+
+void denew(unsigned &x, unsigned y) {
 	if (x > y) x = y;
 }
 
-unsigned getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres) {
+unsigned SimJoiner::getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres) {
 	if (ed1 - st1 > ed2 - st2) {
 		swap(st1, st2);
 		swap(ed1, ed2);
@@ -233,4 +223,176 @@ unsigned getED(const char* st1, const char* ed1, const char* st2, const char* ed
 		swap(d0, d1);
 	}
 	return d0[l2 + thres - l1];
+}
+
+int nterm;
+int tmpSize[MAXN];
+int termSize[MAXN], termMin[MAXN]; // wordN
+
+vector <vector <int>> invList;
+
+Trie triePool[MAX_NODE];
+Trie *pr;
+int trieSize;
+
+Trie *newTrie () {
+	return &triePool[trieSize++];
+}
+
+void SimJoiner::insertTrie (int id) {
+	Trie *px = 0;
+	vector <string> tokens;
+	vector <int> terms;
+	istringstream bufStream(str[id]);
+	for (string token; bufStream >> token; tokens.emplace_back(token));
+	for (auto &token : tokens) {
+		px = pr;
+		for (int i = 0; i < token.length(); i++) {
+			px = px->next(token[i]);
+		}
+		if (px->id == -1) {
+			termMin[nterm] = MAX_LENGTH;
+			px->id = nterm++;
+			invList.emplace_back(0);
+		}
+		terms.emplace_back(px->id);
+	}
+	sort(terms.begin(), terms.end());
+	auto uniqueEnd = unique(terms.begin(), terms.end());
+	termSize[id] = uniqueEnd - terms.begin();
+	terms.erase(uniqueEnd, terms.end());
+
+	for (const auto &term : terms) {
+		invList[term].emplace_back(id);
+		if (terms.size() < termMin[term]) {
+			termMin[term] = terms.size();
+		}
+	}
+}
+
+int nword;
+
+void SimJoiner::createIndexJaccard(const char *filename) {
+	nstr = 0;
+	nterm = 0;
+	invList.clear();
+	trieSize = 0;
+	pr = newTrie();
+
+	FILE *pf = fopen(filename, "r");
+	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
+	while (fgets(str[nstr], MAX_LENGTH, pf)) {
+		if (str[nstr][strlen(str[nstr]) - 1] == '\n') str[nstr][strlen(str[nstr]) - 1] = 0;
+		length[nstr] = strlen(str[nstr]);
+		insertTrie(nstr);
+		nstr++;
+	}
+	fclose(pf);
+
+	for (int i = 0; i < invList.size(); i++) {
+		sort(invList[i].begin(), invList[i].end());
+	}
+}
+
+void SimJoiner::searchJaccard(const char *qstr, int qlen, double threshold, int qid, vector <JaccardJoinResult> &result) {
+	nquery++;
+	int p = 0, qTermSize = 0, appearWordN = 0;
+
+	vector <string> tokens;
+	vector <int> terms;
+	Trie *px = 0;
+	istringstream bufStream(qstr);
+	for (string token; bufStream >> token; tokens.emplace_back(token));
+	for (auto &token : tokens) {
+		px = pr;
+		for (int i = 0; i < token.length(); i++) {
+			px = px->next(token[i]);
+		}
+		if (px->id != -1) {
+			terms.emplace_back(px->id);
+		}
+		qTermSize++;
+	}
+	sort(terms.begin(), terms.end());
+	auto uniqueEnd = unique(terms.begin(), terms.end());
+	qTermSize -= terms.end() - uniqueEnd;
+	terms.erase(uniqueEnd, terms.end());
+
+	int minSize = MAX_LENGTH;
+	for (auto term : terms) {
+		minSize = min(minSize, termMin[term]);
+	}
+	int bound = ceil(max(double(qTermSize), (qTermSize + minSize) / (1 + threshold)) * threshold);
+
+	vector <pair <int, int>> invIdx;
+
+	for (auto term : terms) {
+		invIdx.emplace_back(invList[term].size(), term);
+	}
+	
+	if (invIdx.size() < bound) {
+		return;
+	}
+
+	sort(invIdx.begin(), invIdx.end());
+
+	int DD = max(0, bound - 2);
+	vector <int> candidate1;
+
+	for (int i = 0; i < invIdx.size() - DD; i++) {
+		int term = invIdx[i].second;
+		for (auto &id : invList[term]) {
+			if (termSize[id] < bound) {
+				continue;
+			}
+			if (qFlag[id] != nquery) {
+				qFlag[id] = nquery;
+				tmpSize[id] = 0;
+			}
+			tmpSize[id]++;
+			if (tmpSize[id] == bound - DD) {
+				candidate1.emplace_back(id);
+			}
+		}
+	}
+
+	vector <int> candidate2;
+
+	for (auto &id : candidate1) {
+		for (int i = invIdx.size() - DD; i < invIdx.size(); i++) {
+			if (tmpSize[id] + invIdx.size() - i < bound) {
+				break;
+			}
+			int term = invIdx[i].second;
+			if (binary_search(invList[term].begin(), invList[term].end(), id)) {
+				tmpSize[id]++;
+			}
+		}
+		if (tmpSize[id] >= bound) {
+			candidate2.emplace_back(id);
+		}
+	}
+	sort(candidate2.begin(), candidate2.end());
+	for (auto &id : candidate2) {
+		double jac = tmpSize[id] / double(qTermSize + termSize[id] - tmpSize[id]);
+		if (jac >= threshold) result.push_back(JaccardJoinResult(qid, id, jac));
+	}
+}
+
+int SimJoiner::joinJaccard(const char *filename1, const char *filename2, double threshold, vector <JaccardJoinResult> &result)
+{
+	result.clear();
+	createIndexJaccard(filename2);
+
+	FILE *pf = fopen(filename1, "r");
+	setvbuf(pf, new char[1 << 20], _IOFBF, 1 << 20);
+	int cquery = 0;
+	char buf[MAX_LENGTH];
+	while (fgets(buf, MAX_LENGTH, pf)) {
+		if (buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = 0;
+		searchJaccard(buf, strlen(buf), threshold, cquery, result);
+		cquery++;
+	}
+	fclose(pf);
+	return SUCCESS;
 }

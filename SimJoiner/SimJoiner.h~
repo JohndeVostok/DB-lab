@@ -14,7 +14,7 @@ public:
 		id2 = b;
 		s = c;
     }
-    bool operator < (const JoinResult &a, const JoinResult &b) {
+    friend bool operator < (const JoinResult &a, const JoinResult &b) {
 		return (a.id1 == b.id1) ? a.id2 < b.id2 : a.id1 < b.id1;
     }
 };
@@ -22,18 +22,29 @@ public:
 typedef JoinResult<unsigned, double> JaccardJoinResult;
 typedef JoinResult<unsigned, unsigned> EDJoinResult;
 
-const int SUCCESS = 0;
-const int FAILURE = 1;
+const int SUCCESS = 0, FAILURE = 1;
 
-const int MAX_LENGTH = 2048;
+const int MAXN = 1 << 18;
+const int MAX_LENGTH = 512;
+const int N_ASCII = 128;
+
+const int ED_LIMIT = 3;
 
 class SimJoiner {
 public:
+	int nquery;
     SimJoiner();
     ~SimJoiner();
 
+    void createIndexED(const char *filename);
+    void searchED(const char *query, int queryLength, int __n, std::vector<EDJoinResult> &result);
+    int joinED(const char *filename1, const char *filename2, unsigned threshold, std::vector <EDJoinResult> &result);
+	unsigned getED(const char* st1, const char* ed1, const char* st2, const char* ed2, unsigned thres);
+
+    void createIndexJaccard(const char *filename);      
+    void insertTrieJ(int id);
+    void searchJaccard(const char *query, int queryLength, double threshold, int __n, std::vector<JaccardJoinResult> &result);
     int joinJaccard(const char *filename1, const char *filename2, double threshold, std::vector<JaccardJoinResult> &result);
-    int joinED(const char *filename1, const char *filename2, unsigned threshold, std::vector<EDJoinResult> &result);
 };
 
 #endif
