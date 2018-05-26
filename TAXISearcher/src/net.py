@@ -19,8 +19,6 @@ if __name__ == "__main__":
 	with open("../data/road.nedge") as f:
 		lines = f.readlines()
 	lines.pop(0)
-#	print(mapWidth - max([tmp[0] for tmp in nodes]), min([tmp[0] for tmp in nodes]))
-#	print(mapHeight - max([tmp[1] for tmp in nodes]), min([tmp[1] for tmp in nodes]))
 
 	mapxMin = int((min([tmp[0] for tmp in nodes]) / grid) - 1) * grid
 	mapxMax = int((max([tmp[0] for tmp in nodes]) / grid) + 2) * grid
@@ -28,6 +26,7 @@ if __name__ == "__main__":
 	mapyMax = int((max([tmp[1] for tmp in nodes]) / grid) + 2) * grid
 	mapWidth = mapxMax - mapxMin
 	mapHeight = mapyMax - mapyMin
+	print(mapWidth, mapHeight)
 
 	for i in range(len(nodes)):
 		nodes[i][0] -= mapxMin
