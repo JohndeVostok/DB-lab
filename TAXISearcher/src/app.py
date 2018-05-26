@@ -20,9 +20,9 @@ class MapUI(wx.Frame):
 		pen = wx.Pen(wx.Colour(0,0,0))
 		dc.SetPen(pen)
 		brush = wx.Brush("red")
-		for x in range(0, 950, 50):
+		for x in range(0, 950, 25):
 			dc.DrawLine(x, 0, x, 800)
-		for y in range(0, 800, 50):
+		for y in range(0, 800, 25):
 			dc.DrawLine(0, y, 950, y)
 
 		pen = wx.Pen(wx.Colour(0,0,255))
