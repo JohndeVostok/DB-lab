@@ -1,30 +1,55 @@
 import pickle
 
-def dist(node0, node1):
-    return ((node0[0] - node1[0]) ** 2 + (node0[1] - node1[1]) ** 2) ** 0.5
+def dist(nodes, node0, node1):
+    return ((nodes[node0][0] - nodes[node1][0]) ** 2 + (nodes[node0][1] - nodes[node1][1]) ** 2) ** 0.5
 
-def validate(nodes, cars, node, car):
+def detour(nodes, cars, carnode, node, destnode, tours):
+    n = len(tours) + 1
+    detours = [dist(nodes, carnode, node) - dist(nodes, node, tours[i]) for i in range(len(tours))]
+    detours.append(-dist(nodes, node, destnode))
+    dest = [i for i in tours]
+    dest.append(destnode)
+    flag = [0 for i in range(n)]
+    tmpnode = node
+    order = []
+    for i in range(n):
+        mn = 10000000
+        tmp = -1
+        for j in range(n):
+            if flag[j] == 0 and dist(nodes, tmpnode, dest[j]) < mn:
+                mn = dist(nodes, tmpnode, dest[j])
+                tmp = j
+        for j in range(n):
+            if flag[j] == 0:
+                detours[j] += mn
+        order.append(tmp)
+        flag[tmp] = 1
+    ans = [node]
+    for i in range(n):
+        ans.append(dest[order[i]])
+    return detours, ans
+
+def validate(nodes, cars, node, car, destnode):
     if len(cars[car][1]) > 3:
-        return False
-    elif dist(nodes[node], nodes[cars[car][0]]) > 10000:
-        return False
-    elif len(cars[car][1]) == 1:
-        
-    return True
+        return False, []
+    if len(cars[car][1]) == 0:
+        return False, []
+    if dist(nodes, node, cars[car][0]) > 10000:
+        return False, []
+    if len(cars[car][1]) > 0:
+        detours, order = detour(nodes, cars, cars[car][0], node, destnode, cars[car][1])
+        if (max(detours) > 10000):
+            return False, []
+        else:
+            return True, order
+    return True, [node, destnode]
 
-def search(node):
+def search(nodes, cars, gridcars, node, destnode):
     grid = 5000
     stepList = [[0, 0], [0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [1, -1], [-1, -1],
                 [-1, 1], [0, 2], [2, 0], [0, -2], [-2, 0], [1, 2], [2, 1], [-1, 2],
                 [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1], [2, 2], [-2, 2],
                 [2, -2], [-2, -2]]
-
-    with open("../data/map.pkl", "rb") as f:
-        nodes, edges = pickle.load(f)
-    with open("../data/cars.pkl", "rb") as f:
-        cars = pickle.load(f)
-    with open("../data/gridcar.pkl", "rb") as f:
-        gridcars = pickle.load(f)
 
     gx = int(nodes[node][0] / 5000)
     gy = int(nodes[node][1] / 5000)
@@ -38,8 +63,9 @@ def search(node):
         if py < 0 or py >= 32:
             continue
         for car in gridcars[px * 32 + py]:
-            if validate(nodes, cars, node, car):
-                res.append(car)
+            flag, dests = validate(nodes, cars, node, car, destnode)
+            if (flag):
+                res.append([car, dests])
                 if len(res) == 5:
                     break
         if len(res) == 5:
@@ -47,5 +73,5 @@ def search(node):
     return res
 
 if __name__ == "__main__":
-    res = search(5000)
+    res = search(5000, 5001)
     print(res)

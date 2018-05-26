@@ -5,6 +5,7 @@
 *.exe
 *.out
 *.zip
+*.pyc
 SimSearcher/simsearcher
 SimJoiner/simjoiner
 TAXISearcher/data
