@@ -1,6 +1,8 @@
 import pickle
 import shortpath
 
+deepValidateFlag = True
+
 def dist(node0, node1):
     global nodes
     return ((nodes[node0][0] - nodes[node1][0]) ** 2 + (nodes[node0][1] - nodes[node1][1]) ** 2) ** 0.5
@@ -43,6 +45,34 @@ def validate(node, car, destnode):
             return True, order
     return True, [0]
 
+def deepValidate(node, car, destnode, order):
+    global nodes, cars
+    dist, path = shortpath.getRoad(node, cars[car][0])
+    if (dist > 10000):
+        return False, [0]
+
+    distpick, path = shortpath.getRoad(cars[car][0], node)
+    disttmp = distpick
+    nodetmp = node
+    info = [[] for i in order]
+    for sp in order:
+        if (sp == len(cars[car][1])):
+            dist, path = shortpath.getRoad(nodetmp, destnode)
+            disttmp += dist
+            dist, path = shortpath.getRoad(node, destnode)
+            if (disttmp - distpick - dist > 10000):
+                return False, [0]
+            info[sp] = [dist, disttmp - distpick]
+        else:
+            dist, path = shortpath.getRoad(nodetmp, cars[car][1][sp])
+            disttmp += dist
+            dist, path = shortpath.getRoad(cars[car][0], cars[car][1][sp])
+            if (disttmp - dist > 10000):
+                return False, [0]
+            info[sp] = [dist, disttmp]
+    dist, path = shortpath.getRoad(cars[car][0], node)
+    return True, [dist, info]
+
 def search(node, destnode):
     global nodes, cars, gridcars
     grid = 5000
@@ -65,7 +95,12 @@ def search(node, destnode):
         for car in gridcars[px * 32 + py]:
             flag, order = validate(node, car, destnode)
             if (flag):
-                res.append([car, order])
+                detourInfo = [0]
+                if deepValidateFlag:
+                    flag, detourInfo = deepValidate(node, car, destnode, order)
+                    if not flag:
+                        continue
+                res.append([car, order, detourInfo])
                 if len(res) == 5:
                     break
         if len(res) == 5:

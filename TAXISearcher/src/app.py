@@ -120,7 +120,7 @@ class MainFrame(wx.Frame):
         self.textst = wx.TextCtrl(panel, pos = (20, 20), size = (140, 40))
         self.texted = wx.TextCtrl(panel, pos = (20, 80), size = (140, 40))
         self.scaleLabel = wx.StaticText(panel, pos = (20, 260), size = (140, 40))
-        self.tourLabels = [wx.StaticText(panel, pos = (200, 20 + 120 * i)) for i in range(5)]
+        self.tourLabels = [wx.StaticText(panel, pos = (200, 20 + 100 * i)) for i in range(5)]
         button = wx.Button(panel, label = "search", pos = (20, 160), size = (140, 40))
         self.Bind(wx.EVT_BUTTON, self.search, button)
     def search(self, event):
@@ -143,34 +143,52 @@ class MainFrame(wx.Frame):
         global nodes, cars, tours
         self.scaleLabel.SetLabel("1 grid = " + str(tours[0][2] / 800 * 50) + "m")
         for idx, st in enumerate(res):
-            nodeList = [cars[st[0]][0], start]
-            l = getcar.dist(cars[st[0]][0], start)
-            distList = [l]
-            detour = [[], [], [], []]
-            nodeId = 1
-            for t in st[1]:
-                nodeId += 1
-                if t == len(cars[st[0]][1]):
-                    nodeList.append(end)
-                else:
-                    nodeList.append(cars[st[0]][1][t])
-                l += getcar.dist(nodeList[nodeId], nodeList[nodeId - 1])
-                if t == len(cars[st[0]][1]):
-                    distList.append(l - distList[0])
-                    detour[t].append(getcar.dist(start, nodeList[nodeId]))
-                else:
-                    distList.append(l)
-                    detour[t].append(getcar.dist(cars[st[0]][0], nodeList[nodeId]))
-                detour[t].append(distList[nodeId - 1])
-            tmptext = "->".join([str(t) for t in nodeList]) + "\n"
-            for i in range(len(st[1])):
-                if (i == len(cars[st[0]][1])):
-                    tmptext += "pass" + str(i) + "(*):"
-                else:
-                    tmptext += "pass" + str(i) + "   :"
-                tmptext += "expect: " + str(int(detour[i][0])) + " dist:" + str(int(detour[i][1])) + " detour:" + str(int(detour[i][1] - detour[i][0])) + "\n"
-            self.tourLabels[idx].SetLabel(tmptext)
-
+            if st[2][0] == 0:
+                nodeList = [cars[st[0]][0], start]
+                l = getcar.dist(cars[st[0]][0], start)
+                distList = [l]
+                detour = [[], [], [], []]
+                nodeId = 1
+                for t in st[1]:
+                    nodeId += 1
+                    if t == len(cars[st[0]][1]):
+                        nodeList.append(end)
+                    else:
+                        nodeList.append(cars[st[0]][1][t])
+                    l += getcar.dist(nodeList[nodeId], nodeList[nodeId - 1])
+                    if t == len(cars[st[0]][1]):
+                        distList.append(l - distList[0])
+                        detour[t].append(getcar.dist(start, nodeList[nodeId]))
+                    else:
+                        distList.append(l)
+                        detour[t].append(getcar.dist(cars[st[0]][0], nodeList[nodeId]))
+                    detour[t].append(distList[nodeId - 1])
+                tmptext = "->".join([str(t) for t in nodeList]) + "\n"
+                for i in range(len(st[1])):
+                    if (i == len(cars[st[0]][1])):
+                        tmptext += "pass" + str(i) + "(*):"
+                    else:
+                        tmptext += "pass" + str(i) + "   :"
+                    tmptext += "expect: " + str(int(detour[i][0])) + " dist:" + str(int(detour[i][1])) + " detour:" + str(int(detour[i][1] - detour[i][0])) + "\n"
+                self.tourLabels[idx].SetLabel(tmptext)
+            else:
+                nodeList = [str(cars[st[0]][0]), str(start)]
+                infoList = []
+                for sp in st[1]:
+                    if sp == len(cars[st[0]][1]):
+                        nodeList.append(str(end) + "(" + str(sp) + "*)")
+                    else:
+                        nodeList.append(str(cars[st[0]][1][sp]) + "(" + str(sp) + ")")
+                for t, info in enumerate(st[2][1]):
+                    text = ""
+                    if t == len(cars[st[0]][1]):
+                        text = "pass" + str(t) + "(*): "
+                    else:
+                        text = "pass" + str(t) + ": "
+                    text += "expect: " + str(info[0]) + " dist: " + str(info[1]) + "detour: " + str(info[1] - info[0])
+                    infoList.append(text)
+                self.tourLabels[idx].SetLabel("dist: " + str(st[2][0]) + " id: " + str(st[0]) + "\n" + "->".join(nodeList) + "\n" + "\n".join(infoList))
+                        
 class App(wx.App):
     def OnInit(self):
         self.frame = MainFrame(None, title = "Taxi search", size = [800, 600])
@@ -240,7 +258,7 @@ if __name__ == "__main__":
     shortpath.init(nodes, edges)
     getcar.init(nodes, cars, gridcars)
     marks = []
-    tours = [[], [], [], []]
+    tours = [[] for i in range(5)]
     app = App(False)
     app.MainLoop()
 
