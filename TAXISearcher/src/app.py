@@ -1,6 +1,6 @@
 import pickle
 import wx
-import getdist
+import getcar
 import shortpath
 import time
 
@@ -106,15 +106,20 @@ class TourFrame(wx.Frame):
         self.dc.SetPen(pen)
         flag, tmp = getpos(tours[3][0])
         self.dc.DrawCircle(tmp[0], tmp[1], 5)
+        brush = wx.Brush("white")
+        self.dc.SetBrush(brush)
+        pen = wx.Pen("black", 3)
+        self.dc.SetPen(pen)
         flag, tmp = getpos(tours[3][1])
-        self.dc.DrawCircle(tmp[0], tmp[1], 5)
+        self.dc.DrawCircle(tmp[0], tmp[1], 4)
 
 class MainFrame(wx.Frame):
     def __init__(self, parent, *args, **kwargs):
         super(MainFrame, self).__init__(parent, *args, **kwargs)
         panel = wx.Panel(self)
-        self.textst = wx.TextCtrl(panel, pos = (20, 20), size = (140, 40)) 
-        self.texted = wx.TextCtrl(panel, pos = (20, 80), size = (140, 40)) 
+        self.textst = wx.TextCtrl(panel, pos = (20, 20), size = (140, 40))
+        self.texted = wx.TextCtrl(panel, pos = (20, 80), size = (140, 40))
+        self.scaleLabel = wx.StaticText(panel, pos = (20, 260), size = (140, 40))
         self.tourLabels = [wx.StaticText(panel, pos = (200, 20 + 120 * i)) for i in range(5)]
         button = wx.Button(panel, label = "search", pos = (20, 160), size = (140, 40))
         self.Bind(wx.EVT_BUTTON, self.search, button)
@@ -128,17 +133,18 @@ class MainFrame(wx.Frame):
             marks.append(nodes[ed])
         except:
             return
-        res = getdist.search(nodes, cars, gridcars, st, ed)
+        res = getcar.search(st, ed)
         getTours(res, st, ed)
         self.refreshLabel(res, st, ed)
 #        mapFrame = MapFrame(self)
         tourFrame = TourFrame(self)
         #self.Close(True)
     def refreshLabel(self, res, start, end):
-        global nodes, cars
+        global nodes, cars, tours
+        self.scaleLabel.SetLabel("1 grid = " + str(tours[0][2] / 800 * 50) + "m")
         for idx, st in enumerate(res):
             nodeList = [cars[st[0]][0], start]
-            l = getdist.dist(nodes, cars[st[0]][0], start)
+            l = getcar.dist(cars[st[0]][0], start)
             distList = [l]
             detour = [[], [], [], []]
             nodeId = 1
@@ -148,13 +154,13 @@ class MainFrame(wx.Frame):
                     nodeList.append(end)
                 else:
                     nodeList.append(cars[st[0]][1][t])
-                l += getdist.dist(nodes, nodeList[nodeId], nodeList[nodeId - 1])
+                l += getcar.dist(nodeList[nodeId], nodeList[nodeId - 1])
                 if t == len(cars[st[0]][1]):
                     distList.append(l - distList[0])
-                    detour[t].append(getdist.dist(nodes, start, nodeList[nodeId]))
+                    detour[t].append(getcar.dist(start, nodeList[nodeId]))
                 else:
                     distList.append(l)
-                    detour[t].append(getdist.dist(nodes, cars[st[0]][0], nodeList[nodeId]))
+                    detour[t].append(getcar.dist(cars[st[0]][0], nodeList[nodeId]))
                 detour[t].append(distList[nodeId - 1])
             tmptext = "->".join([str(t) for t in nodeList]) + "\n"
             for i in range(len(st[1])):
@@ -232,6 +238,7 @@ if __name__ == "__main__":
         gridcars = pickle.load(f)
 
     shortpath.init(nodes, edges)
+    getcar.init(nodes, cars, gridcars)
     marks = []
     tours = [[], [], [], []]
     app = App(False)
