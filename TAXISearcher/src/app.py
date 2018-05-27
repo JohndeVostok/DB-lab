@@ -1,6 +1,8 @@
 import pickle
 import wx
 import getdist
+import shortpath
+import time
 
 scale = 200
 
@@ -130,14 +132,37 @@ class MainFrame(wx.Frame):
         getTours(res, st, ed)
         self.refreshLabel(res, st, ed)
 #        mapFrame = MapFrame(self)
-#        tourFrame = TourFrame(self)
+        tourFrame = TourFrame(self)
         #self.Close(True)
-    def refreshLabel(self, res, st, ed):
+    def refreshLabel(self, res, start, end):
+        global nodes, cars
         for idx, st in enumerate(res):
-            nodeList = [cars[st[0]][0]]
+            nodeList = [cars[st[0]][0], start]
+            l = getdist.dist(nodes, cars[st[0]][0], start)
+            distList = [l]
+            detour = [[], [], [], []]
+            nodeId = 1
             for t in st[1]:
-                nodeList.append(t)
-            tmptext = "->".join([str(t) for t in nodeList]) + "\nsbsb\n"
+                nodeId += 1
+                if t == len(cars[st[0]][1]):
+                    nodeList.append(end)
+                else:
+                    nodeList.append(cars[st[0]][1][t])
+                l += getdist.dist(nodes, nodeList[nodeId], nodeList[nodeId - 1])
+                if t == len(cars[st[0]][1]):
+                    distList.append(l - distList[0])
+                    detour[t].append(getdist.dist(nodes, start, nodeList[nodeId]))
+                else:
+                    distList.append(l)
+                    detour[t].append(getdist.dist(nodes, cars[st[0]][0], nodeList[nodeId]))
+                detour[t].append(distList[nodeId - 1])
+            tmptext = "->".join([str(t) for t in nodeList]) + "\n"
+            for i in range(len(st[1])):
+                if (i == len(cars[st[0]][1])):
+                    tmptext += "pass" + str(i) + "(*):"
+                else:
+                    tmptext += "pass" + str(i) + "   :"
+                tmptext += "expect: " + str(int(detour[i][0])) + " dist:" + str(int(detour[i][1])) + " detour:" + str(int(detour[i][1] - detour[i][0])) + "\n"
             self.tourLabels[idx].SetLabel(tmptext)
 
 class App(wx.App):
@@ -153,10 +178,10 @@ def getTours(res, start, end):
     tours[1] = []
     tours[2] = []
 
-    tmp = []
+    tmp = [start, end]
     for st in res:
         tmp[len(tmp) : len(tmp)] = [cars[st[0]][0]]
-        tmp[len(tmp) : len(tmp)] = st[1]
+        tmp[len(tmp) : len(tmp)] = cars[st[0]][1]
     tmp = [nodes[i] for i in tmp]
     mnx = min([t[0] for t in tmp])
     mxx = max([t[0] for t in tmp])
@@ -167,16 +192,23 @@ def getTours(res, start, end):
     left = max([0, int((mnx - (side - (mxx - mnx)) / 2) / 5000) * 5000])
     top = max([0, int((mny - (side - (mxy - mny)) / 2) / 5000) * 5000])
     tours[0] = [left, top, side]
+
     for idx, st in enumerate(res):
         tours[1].append([])
         tours[1][idx].append(cars[st[0]][0])
+        tours[1][idx].append(start)
         for dt in st[1]:
-            tours[1][idx].append(dt)
-    tours[2] = tours[1]
-    marks.append([left, top])
-    marks.append([left, top + side])
-    marks.append([left + side, top])
-    marks.append([left + side, top + side])
+            if dt == len(cars[st[0]][1]):
+                tours[1][idx].append(end)
+            else:
+                tours[1][idx].append(cars[st[0]][1][dt])
+
+    for idx, tnodes in enumerate(tours[1]):
+        tours[2].append([cars[st[0]][0]])
+        for i in range(1, len(tnodes)):
+            _, tmp = shortpath.getRoad(tnodes[i - 1], tnodes[i])
+            tours[2][idx].pop()
+            tours[2][idx][len(tours[2][idx]):len(tours[2][idx])] = tmp
     tours[3] = [nodes[start], nodes[end]]
 
 def getpos(node):
@@ -199,6 +231,7 @@ if __name__ == "__main__":
     with open("../data/gridcar.pkl", "rb") as f:
         gridcars = pickle.load(f)
 
+    shortpath.init(nodes, edges)
     marks = []
     tours = [[], [], [], []]
     app = App(False)

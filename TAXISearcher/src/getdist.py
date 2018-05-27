@@ -24,15 +24,10 @@ def detour(nodes, cars, carnode, node, destnode, tours):
                 detours[j] += mn
         order.append(tmp)
         flag[tmp] = 1
-    ans = [node]
-    for i in range(n):
-        ans.append(dest[order[i]])
-    return detours, ans
+    return detours, order
 
 def validate(nodes, cars, node, car, destnode):
     if len(cars[car][1]) > 3:
-        return False, []
-    if len(cars[car][1]) == 0:
         return False, []
     if dist(nodes, node, cars[car][0]) > 10000:
         return False, []
@@ -42,7 +37,7 @@ def validate(nodes, cars, node, car, destnode):
             return False, []
         else:
             return True, order
-    return True, [node, destnode]
+    return True, [0]
 
 def search(nodes, cars, gridcars, node, destnode):
     grid = 5000
@@ -63,9 +58,9 @@ def search(nodes, cars, gridcars, node, destnode):
         if py < 0 or py >= 32:
             continue
         for car in gridcars[px * 32 + py]:
-            flag, dests = validate(nodes, cars, node, car, destnode)
+            flag, order = validate(nodes, cars, node, car, destnode)
             if (flag):
-                res.append([car, dests])
+                res.append([car, order])
                 if len(res) == 5:
                     break
         if len(res) == 5:
